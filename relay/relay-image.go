@@ -86,7 +86,10 @@ func ImageHelper(c *gin.Context) *dto.OpenAIErrorWithStatusCode {
 
 	imageRequest.Model = relayInfo.UpstreamModelName
 
-	priceData := helper.ModelPriceHelper(c, relayInfo, 0, 0)
+	priceData, err := helper.ModelPriceHelper(c, relayInfo, 0, 0)
+	if err != nil {
+		return service.OpenAIErrorWrapperLocal(err, "model_price_error", http.StatusInternalServerError)
+	}
 	if !priceData.UsePrice {
 		// modelRatio 16 = modelPrice $0.04
 		// per 1 modelRatio = $0.04 / 16
@@ -115,8 +118,8 @@ func ImageHelper(c *gin.Context) *dto.OpenAIErrorWithStatusCode {
 		}
 	}
 
-	imageRatio := priceData.ModelPrice * sizeRatio * qualityRatio * float64(imageRequest.N)
-	quota := int(imageRatio * priceData.GroupRatio * common.QuotaPerUnit)
+	priceData.ModelPrice *= sizeRatio * qualityRatio * float64(imageRequest.N)
+	quota := int(priceData.ModelPrice * priceData.GroupRatio * common.QuotaPerUnit)
 
 	if userQuota-quota < 0 {
 		return service.OpenAIErrorWrapperLocal(fmt.Errorf("image pre-consumed quota failed, user quota: %s, need quota: %s", common.FormatQuota(userQuota), common.FormatQuota(quota)), "insufficient_user_quota", http.StatusForbidden)
